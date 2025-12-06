@@ -7,7 +7,7 @@ A simple, beginner-friendly web application to help students track their daily e
 ## 🚀 Live Demo
 Deploy using GitHub Pages to get your live link here:
 ```
-https://arjungithub.github.io/student-expense-manager/
+https://arjungitthub.github.io/student-expense-manager/
 ```
 (Your link will work once you enable GitHub Pages in the repository settings.)
 
