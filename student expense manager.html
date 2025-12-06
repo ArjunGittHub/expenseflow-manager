@@ -1,0 +1,243 @@
+<!--
+README
+======
+Student Expense Manager (Single-file web app)
+
+What this is:
+- A beginner-friendly web app to track student expenses locally in the browser using localStorage.
+- Features: Add/Delete expenses, Category & Month filters, Monthly totals, Set monthly budget, CSV export, Clear all.
+
+How to use:
+1. Save this file as `index.html` on your computer.
+2. Open it with any modern browser (double-click or right-click > Open with > Chrome/Edge/Firefox).
+3. The app saves data in your browser's localStorage — no server required.
+
+Optional next steps I can help with:
+- Polish UI or change currencies/labels
+- Add charts (spending by category)
+- Convert to React or connect to a Flask backend (SQLite)
+- Prepare a GitHub repo and README.md
+- Deploy to GitHub Pages
+
+If you want me to push this to a GitHub-ready repo, tell me your GitHub username and I'll provide the exact commands and files.
+--> 
+
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>Student Expense Manager</title>
+<style>
+  :root{font-family:Inter,system-ui,Segoe UI,Roboto,'Helvetica Neue',Arial; --accent:#2563eb;}
+  body{margin:0;background:#f7fafc;color:#0f172a;padding:20px;display:flex;justify-content:center}
+  .wrap{width:100%;max-width:900px;background:#fff;border-radius:12px;box-shadow:0 8px 30px rgba(2,6,23,0.08);padding:20px}
+  header{display:flex;justify-content:space-between;align-items:center;margin-bottom:12px}
+  h1{font-size:20px;margin:0}
+  form{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin-bottom:12px}
+  input,select{padding:10px;border:1px solid #e6eef8;border-radius:8px;font-size:14px}
+  button{grid-column:span 1;padding:10px;border-radius:8px;border:none;background:var(--accent);color:white;cursor:pointer}
+  .btn-secondary{background:#e6eef8;color:var(--accent)}
+  .controls{display:flex;gap:8px;align-items:center;margin-bottom:12px}
+  .summary{display:flex;gap:12px;align-items:center;margin-bottom:12px}
+  .card{background:#f1f5f9;padding:10px;border-radius:8px}
+  table{width:100%;border-collapse:collapse}
+  th,td{padding:8px;text-align:left;border-bottom:1px solid #eef2f7}
+  .muted{color:#64748b;font-size:13px}
+  @media (max-width:700px){form{grid-template-columns:1fr} .controls{flex-direction:column;align-items:stretch}}
+</style>
+</head>
+<body>
+  <div class="wrap">
+    <header>
+      <h1>Student Expense Manager</h1>
+      <div class="muted">Local mode • Saves in browser</div>
+    </header>
+
+    <form id="expenseForm">
+      <input id="amount" type="number" step="0.01" placeholder="Amount (₹)" required />
+      <select id="category" required>
+        <option value="">Category</option>
+        <option>Food</option>
+        <option>Transport</option>
+        <option>Rent</option>
+        <option>Entertainment</option>
+        <option>Other</option>
+      </select>
+      <input id="date" type="date" required />
+      <input id="note" type="text" placeholder="Note (optional)" />
+      <button id="addBtn" type="submit">Add Expense</button>
+      <button type="button" id="clearBtn" class="btn-secondary">Clear All</button>
+      <input id="budget" type="number" step="0.01" placeholder="Monthly budget (₹)" />
+      <button id="setBudgetBtn" type="button" class="btn-secondary">Set Budget</button>
+    </form>
+
+    <div class="controls">
+      <label>
+        Month:
+        <input id="monthFilter" type="month" />
+      </label>
+      <label>
+        Category:
+        <select id="categoryFilter"><option value="">All</option><option>Food</option><option>Transport</option><option>Rent</option><option>Entertainment</option><option>Other</option></select>
+      </label>
+      <button id="export">Export CSV</button>
+    </div>
+
+    <div class="summary">
+      <div class="card" id="totalCard">Total this month: ₹0</div>
+      <div class="card" id="budgetCard">Budget: —</div>
+      <div class="card" id="remainingCard">Remaining: —</div>
+    </div>
+
+    <table>
+      <thead><tr><th>Date</th><th>Note</th><th>Category</th><th>Amount (₹)</th><th></th></tr></thead>
+      <tbody id="list"></tbody>
+    </table>
+  </div>
+
+<script>
+(() => {
+  const LS_KEY = 'student_expenses_v1';
+  const LS_BUDGET = 'student_budget_v1';
+  const form = document.getElementById('expenseForm');
+  const amount = document.getElementById('amount');
+  const category = document.getElementById('category');
+  const dateInput = document.getElementById('date');
+  const note = document.getElementById('note');
+  const list = document.getElementById('list');
+  const monthFilter = document.getElementById('monthFilter');
+  const categoryFilter = document.getElementById('categoryFilter');
+  const totalCard = document.getElementById('totalCard');
+  const budgetCard = document.getElementById('budgetCard');
+  const remainingCard = document.getElementById('remainingCard');
+  const exportBtn = document.getElementById('export');
+  const clearBtn = document.getElementById('clearBtn');
+  const budgetInput = document.getElementById('budget');
+  const setBudgetBtn = document.getElementById('setBudgetBtn');
+
+  function load() {
+    const raw = localStorage.getItem(LS_KEY);
+    return raw ? JSON.parse(raw) : [];
+  }
+  function save(items) {
+    localStorage.setItem(LS_KEY, JSON.stringify(items));
+  }
+  function loadBudget(){ return Number(localStorage.getItem(LS_BUDGET) || 0); }
+  function saveBudget(v){ localStorage.setItem(LS_BUDGET, String(v)); }
+
+  function uid(){ return Date.now().toString(36) + Math.random().toString(36).slice(2,8); }
+
+  function addExpense(item){
+    const items = load();
+    items.push(item);
+    save(items);
+    render();
+  }
+  function removeExpense(id){
+    let items = load();
+    items = items.filter(i => i.id !== id);
+    save(items);
+    render();
+  }
+
+  function getFiltered(){
+    const items = load();
+    const mf = monthFilter.value;
+    const cf = categoryFilter.value;
+    return items.filter(i => {
+      if(mf){
+        const [y,m] = mf.split('-');
+        const d = new Date(i.date);
+        if(d.getFullYear() !== Number(y) || (d.getMonth()+1) !== Number(m)) return false;
+      }
+      if(cf && i.category !== cf) return false;
+      return true;
+    }).sort((a,b) => new Date(b.date) - new Date(a.date));
+  }
+
+  function calcMonthTotal(monthISO){
+    const items = load();
+    const [y,m] = monthISO.split('-');
+    return items.reduce((s,i) => {
+      const d = new Date(i.date);
+      if(d.getFullYear()===Number(y) && (d.getMonth()+1)===Number(m)) return s + Number(i.amount);
+      return s;
+    },0);
+  }
+
+  function render(){
+    const items = getFiltered();
+    list.innerHTML = items.map(i => `\n      <tr>\n        <td>${new Date(i.date).toLocaleDateString()}</td>\n        <td>${i.note||'—'}</td>\n        <td>${i.category}</td>\n        <td>₹${Number(i.amount).toFixed(2)}</td>\n        <td><button data-id="${i.id}" class="del">Delete</button></td>\n      </tr>\n    `).join('');
+    // totals
+    const mf = monthFilter.value || (new Date()).toISOString().slice(0,7);
+    const total = calcMonthTotal(mf);
+    const budget = loadBudget();
+    totalCard.textContent = `Total this month: ₹${total.toFixed(2)}`;
+    budgetCard.textContent = budget ? `Budget: ₹${Number(budget).toFixed(2)}` : 'Budget: —';
+    remainingCard.textContent = budget ? `Remaining: ₹${(budget-total).toFixed(2)}` : 'Remaining: —';
+    // highlight if over budget
+    if(budget && total > budget){
+      remainingCard.style.background = '#ffe4e6';
+      remainingCard.style.color = '#b91c1c';
+    } else {
+      remainingCard.style.background = '';
+      remainingCard.style.color = '';
+    }
+  }
+
+  // handlers
+  form.addEventListener('submit', e => {
+    e.preventDefault();
+    const a = Number(amount.value);
+    if(!a || !category.value || !dateInput.value) return alert('Please fill amount, category and date.');
+    addExpense({
+      id: uid(),
+      amount: a,
+      category: category.value,
+      date: dateInput.value,
+      note: note.value
+    });
+    form.reset();
+  });
+
+  list.addEventListener('click', e => {
+    if(e.target.classList.contains('del')){
+      const id = e.target.dataset.id;
+      if(confirm('Delete this expense?')) removeExpense(id);
+    }
+  });
+
+  monthFilter.addEventListener('change', render);
+  categoryFilter.addEventListener('change', render);
+
+  exportBtn.addEventListener('click', () => {
+    const items = getFiltered();
+    if(!items.length) return alert('No data to export');
+    const csv = ['date,note,category,amount', ...items.map(i => `${i.date},"${(i.note||'').replace(/"/g,'""')}",${i.category},${i.amount}`)].join('\n');
+    const blob = new Blob([csv], {type:'text/csv'});
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a'); a.href = url; a.download = 'expenses.csv'; a.click(); URL.revokeObjectURL(url);
+  });
+
+  clearBtn.addEventListener('click', () => {
+    if(confirm('Clear ALL expenses? This cannot be undone.')) { localStorage.removeItem(LS_KEY); render(); }
+  });
+
+  setBudgetBtn.addEventListener('click', () => {
+    const val = Number(budgetInput.value);
+    if(!val) return alert('Enter a valid budget');
+    saveBudget(val);
+    budgetInput.value = '';
+    render();
+    alert('Budget saved.');
+  });
+
+  // init: set month filter to this month
+  const now = new Date();
+  monthFilter.value = now.toISOString().slice(0,7);
+  render();
+})();
+</script>
+</body>
+</html>
