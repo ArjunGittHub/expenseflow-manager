@@ -1,4 +1,4 @@
-# Student Expense Manager
+#  Expense Manager
 
 A simple, beginner-friendly web application to help students track their daily expenses. This project is built using **HTML**, **CSS**, and **JavaScript**, and stores all data locally using **browser localStorage** — meaning it works offline and requires no backend.
 
